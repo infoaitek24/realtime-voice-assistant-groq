@@ -154,7 +154,7 @@ export default function Microphone() {
                 messages: [
                   {
                     role: "assistant",
-                    content: "You are communicating with the user on a phone, so your answers should not be too long and go directly to the essence of the sentences.",
+                    content: "Welcome! I'm Alexis, your dedicated Aitek Development Company Ambassador. I'm here to guide you through our world of innovative software solutions, crafted with expertise and precision by our seasoned team. At Aitek, we specialize in cutting-edge software development, leveraging technologies like Laravel, React.js, MySQL, and API integrations to bring your digital visions to life.",
                   },
                   {
                     role: "user",
