@@ -1,21 +1,12 @@
-"use client";
-
-import {
-  CreateProjectKeyResponse,
-  LiveClient,
-  LiveTranscriptionEvents,
-  createClient,
-} from "@deepgram/sdk";
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQueue } from "@uidotdev/usehooks";
 import Dg from "./dg.svg";
 import Recording from "./recording.svg";
 import Image from "next/image";
 import axios from "axios";
 import Siriwave from 'react-siriwave';
-
 import ChatGroq from "groq-sdk";
-
+import { CreateProjectKeyResponse, LiveClient, LiveTranscriptionEvents, createClient } from "@deepgram/sdk";
 
 export default function Microphone() {
   const { add, remove, first, size, queue } = useQueue<any>([]);
@@ -31,33 +22,22 @@ export default function Microphone() {
   const [microphone, setMicrophone] = useState<MediaRecorder | null>();
   const [userMedia, setUserMedia] = useState<MediaStream | null>();
   const [caption, setCaption] = useState<string | null>();
-  const [audio, setAudio] = useState<HTMLAudioElement | null>();
+  const [audioQueue, setAudioQueue] = useState([]); // Queue to manage audio playback
+  const [isAudioPlaying, setAudioPlaying] = useState(false); // State to track audio playback
 
   const toggleMicrophone = useCallback(async () => {
     if (microphone && userMedia) {
       setUserMedia(null);
       setMicrophone(null);
-
       microphone.stop();
     } else {
-      const userMedia = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
-
+      const userMedia = await navigator.mediaDevices.getUserMedia({ audio: true });
       const microphone = new MediaRecorder(userMedia);
       microphone.start(500);
 
-      microphone.onstart = () => {
-        setMicOpen(true);
-      };
-
-      microphone.onstop = () => {
-        setMicOpen(false);
-      };
-
-      microphone.ondataavailable = (e) => {
-        add(e.data);
-      };
+      microphone.onstart = () => setMicOpen(true);
+      microphone.onstop = () => setMicOpen(false);
+      microphone.ondataavailable = (e) => add(e.data);
 
       setUserMedia(userMedia);
       setMicrophone(microphone);
@@ -65,62 +45,62 @@ export default function Microphone() {
   }, [add, microphone, userMedia]);
 
   useEffect(() => {
-    if (!groqClient) {
-      console.log("getting a new groqClient");
-      fetch("/api/groq", { cache: "no-store" })
-        .then((res) => res.json())
-        .then((object) => {
+    const fetchGroqClient = async () => {
+      if (!groqClient) {
+        try {
+          const res = await fetch("/api/groq", { cache: "no-store" });
+          const object = await res.json();
           const groq = new ChatGroq({ apiKey: object.apiKey, dangerouslyAllowBrowser: true});
-
           setGroqClient(groq);
           setLoadingKey(false);
-        })
-        .catch((e) => {
+        } catch (e) {
           console.error(e);
-        });
-      
-    }
+        }
+      }
+    };
+
+    fetchGroqClient();
   }, [groqClient]);
 
   useEffect(() => {
-    if (!neetsApiKey) {
-      console.log("getting a new neets api key");
-      fetch("/api/neets", { cache: "no-store" })
-        .then((res) => res.json())
-        .then((object) => {
-          if (!("apiKey" in object)) throw new Error("No api key returned");
-
+    const fetchNeetsApiKey = async () => {
+      if (!neetsApiKey) {
+        try {
+          const res = await fetch("/api/neets", { cache: "no-store" });
+          const object = await res.json();
+          if (!object.apiKey) throw new Error("No api key returned");
           setNeetsApiKey(object.apiKey);
           setLoadingKey(false);
-        })
-        .catch((e) => {
+        } catch (e) {
           console.error(e);
-        });
-    }
+        }
+      }
+    };
+
+    fetchNeetsApiKey();
   }, [neetsApiKey]);
 
   useEffect(() => {
-    if (!apiKey) {
-      console.log("getting a new api key");
-      fetch("/api", { cache: "no-store" })
-        .then((res) => res.json())
-        .then((object) => {
-          if (!("key" in object)) throw new Error("No api key returned");
-
+    const fetchApiKey = async () => {
+      if (!apiKey) {
+        try {
+          const res = await fetch("/api", { cache: "no-store" });
+          const object = await res.json();
+          if (!object.key) throw new Error("No api key returned");
           setApiKey(object);
           setLoadingKey(false);
-        })
-        .catch((e) => {
+        } catch (e) {
           console.error(e);
-        });
-    }
+        }
+      }
+    };
+
+    fetchApiKey();
   }, [apiKey]);
 
   useEffect(() => {
-    
     if (apiKey && "key" in apiKey) {
-      console.log("connecting to deepgram");
-      const deepgram = createClient(apiKey?.key ?? "");
+      const deepgram = createClient(apiKey.key);
       const connection = deepgram.listen.live({
         model: "nova",
         interim_results: false,
@@ -142,61 +122,39 @@ export default function Microphone() {
 
       connection.on(LiveTranscriptionEvents.Transcript, (data) => {
         const words = data.channel.alternatives[0].words;
-        const caption = words
-          .map((word: any) => word.punctuated_word ?? word.word)
-          .join(" ");
+        const caption = words.map((word) => word.punctuated_word ?? word.word).join(" ");
         if (caption !== "") {
           setCaption(caption);
-          if (data.is_final) {            
-            if (groqClient) {
-              const completion = groqClient.chat.completions
-              .create({
-                messages: [
-                  {
-                    role: "assistant",
-                    content: "Welcome! I'm Alexis, your dedicated Aitek Development Company Ambassador. I'm here to guide you through our world of innovative software solutions, crafted with expertise and precision by our seasoned team. At Aitek, we specialize in cutting-edge software development, leveraging technologies like Laravel, React.js, MySQL, and API integrations to bring your digital visions to life.",
-                  },
-                  {
-                    role: "user",
-                    content: caption,
-                  }
-                ],
-                model: "mixtral-8x7b-32768",
-              })
-              .then((chatCompletion) => {
-                if (neetsApiKey) {
-                  setCaption(chatCompletion.choices[0]?.message?.content || "");
-                  axios.post("https://api.neets.ai/v1/tts", {
-                      text: chatCompletion.choices[0]?.message?.content || "",
-                      voice_id: 'us-female-2',
-                      params: {
-                        model: 'style-diff-500'
-                      }
-                    },
-                    {
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': neetsApiKey
-                      },
-                      responseType: 'arraybuffer'
-                    }
-                    ).then((response) => {
-                      const blob = new Blob([response.data], { type: 'audio/mp3' });
-                      const url = URL.createObjectURL(blob);
-
-                      const audio = new Audio(url);
-                      setAudio(audio);
-                      console.log('Playing audio.');
-                      
-                      audio.play();
-                    })
-                    .catch((error) => {
-                      console.error(error);
-                    });
+          if (data.is_final && groqClient && neetsApiKey) {
+            groqClient.chat.completions.create({
+              messages: [
+                {
+                  role: "user",
+                  content: caption,
                 }
+              ],
+              model: "mixtral-8x7b-32768",
+            }).then((chatCompletion) => {
+              axios.post("https://api.neets.ai/v1/tts", {
+                text: chatCompletion.choices[0]?.message?.content || "",
+                voice_id: 'us-female-2',
+                params: {
+                  model: 'style-diff-500'
+                }
+              }, {
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-API-Key': neetsApiKey
+                },
+                responseType: 'arraybuffer'
+              }).then((response) => {
+                const blob = new Blob([response.data], { type: 'audio/mp3' });
+                const url = URL.createObjectURL(blob);
+                setAudioQueue((prevQueue) => [...prevQueue, url]); // Add the new audio URL to the queue
+              }).catch((error) => {
+                console.error(error);
               });
-
-            }
+            });
           }
         }
       });
@@ -204,7 +162,22 @@ export default function Microphone() {
       setConnection(connection);
       setLoading(false);
     }
-  }, [apiKey]);
+  }, [apiKey, groqClient, neetsApiKey]);
+
+  useEffect(() => {
+    // This effect processes the audio queue
+    if (audioQueue.length > 0 && !isAudioPlaying) {
+      setAudioPlaying(true); // Mark as playing
+      const currentAudioUrl = audioQueue[0]; // Get the first audio URL from the queue
+      const audio = new Audio(currentAudioUrl);
+      audio.play(); // Play the audio
+      audio.onended = () => {
+        // Once audio ends, remove it from the queue and mark audio as not playing
+        setAudioQueue((prevQueue) => prevQueue.slice(1));
+        setAudioPlaying(false);
+      };
+    }
+  }, [audioQueue, isAudioPlaying]);
 
   useEffect(() => {
     const processQueue = async () => {
@@ -227,42 +200,21 @@ export default function Microphone() {
     processQueue();
   }, [connection, queue, remove, first, size, isProcessing, isListening]);
 
-  function handleAudio() {
-    return audio && audio.currentTime > 0 && !audio.paused && !audio.ended && audio.readyState > 2;
-  }
-
-  if (isLoadingKey)
-    return (
-      <span className="w-full text-center">Loading temporary API key...</span>
-    );
-  if (isLoading)
-    return <span className="w-full text-center">Loading the app...</span>;
+  if (isLoadingKey) return <span className="w-full text-center">Loading temporary API key...</span>;
+  if (isLoading) return <span className="w-full text-center">Loading the app...</span>;
 
   return (
     <div className="w-full relative">
-      <div className="relative flex w-screen flex justify-center items-center max-w-screen-lg place-items-center content-center before:pointer-events-none after:pointer-events-none before:absolute before:right-0 after:right-1/4 before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px]">
-      <Siriwave
-        theme="ios9"
-        autostart={handleAudio() || false}
-       />
+      <div className="relative flex justify-center items-center max-w-screen-lg">
+        <Siriwave theme="ios9" autostart={isAudioPlaying} />
       </div>
-      <div className="mt-10 flex flex-col align-middle items-center">
+      <div className="mt-10 flex flex-col items-center">
         <button className="w-24 h-24" onClick={() => toggleMicrophone()}>
-          <Recording
-            width="96"
-            height="96"
-            className={
-              `cursor-pointer` + !!userMedia && !!microphone && micOpen
-                ? "fill-red-400 drop-shadow-glowRed"
-                : "fill-gray-600"
-            }
-          />
+          <Image src={Recording} alt="Recording" className={micOpen ? "fill-red-400 drop-shadow-glowRed" : "fill-gray-600"} width="96" height="96"/>
         </button>
-        <div className="mt-20 p-6 text-xl text-center">
-          {caption}
-        </div>
+        <div className="mt-20 p-6 text-xl text-center">{caption}</div>
       </div>
-      
     </div>
   );
 }
+
