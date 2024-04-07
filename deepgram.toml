@@ -1,7 +1,7 @@
 [meta]
   title = "Live audio Next.js Starter"
-  description = "Basic demo for using Deepgram to transcribe microphone audio in Next.js"
-  author = "Deepgram DX Team <devrel@deepgram.com> (https://developers.deepgram.com)"
+  description = "Aitek Software Live Transcription"
+  author = "Aitek Software Live Transcription <devrel@deepgram.com> (https://developers.deepgram.com)"
   useCase = "Live"
   language = "JavaScript"
   framework = "Next.js"
