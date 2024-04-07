@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQueue } from "@uidotdev/usehooks";
-import Dg from "./dg.svg";
-import Recording from "./recording.svg";
-import Image from "next/image";
+import Dg from "./dg.svg"; // Ensure this SVG import path is correct
+import Recording from "./recording.svg"; // Ensure this SVG import path is correct
 import axios from "axios";
 import Siriwave from 'react-siriwave';
-import ChatGroq from "groq-sdk";
+import ChatGroq from "groq-sdk"; // Ensure this import is correctly set up according to your project structure
 import { CreateProjectKeyResponse, LiveClient, LiveTranscriptionEvents, createClient } from "@deepgram/sdk";
 
 export default function Microphone() {
@@ -209,12 +208,12 @@ export default function Microphone() {
         <Siriwave theme="ios9" autostart={isAudioPlaying} />
       </div>
       <div className="mt-10 flex flex-col items-center">
-        <button className="w-24 h-24" onClick={() => toggleMicrophone()}>
-          <Image src={Recording} alt="Recording" className={micOpen ? "fill-red-400 drop-shadow-glowRed" : "fill-gray-600"} width="96" height="96"/>
+        <button className="w-24 h-24" onClick={toggleMicrophone}>
+          {/* Ensure you have the `Recording` SVG or replace this with an appropriate element */}
+          <img src={Recording} alt="Toggle Microphone" />
         </button>
         <div className="mt-20 p-6 text-xl text-center">{caption}</div>
       </div>
     </div>
   );
 }
-
